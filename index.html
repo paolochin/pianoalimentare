@@ -288,10 +288,9 @@
         <div id="sub-content">Caricamento in corso...</div>
     </div>
 
-    <script>
+	<script>
         // REQUIRED: Insert your deployed Google Apps Script Web App URL here
         const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbw3rZ_BXO2QMNzKy36v60iq11_vDuwY08-r0Kp1ZotuqjH-8e1PPwJzXAJbO7Y0xXZ0/exec';
-
 
         // Global State Variables
         let currentData = null;
@@ -333,16 +332,28 @@
             recipeList.innerHTML = '';
 
             try {
-                const response = await fetch(`${WEB_APP_URL}?action=getSheetData&sheetName=${encodeURIComponent(sheetName)}`);
+                // Ensure redirect flow is followed correctly for GAS
+                const response = await fetch(`${WEB_APP_URL}?action=getSheetData&sheetName=${encodeURIComponent(sheetName)}`, {
+                    method: 'GET',
+                    redirect: 'follow'
+                });
                 
+                // Read the raw text first to prevent hidden HTML parsing errors
+                const textResponse = await response.text();
+                
+                let data;
+                try {
+                    data = JSON.parse(textResponse);
+                } catch (parseError) {
+                    throw new Error("Parse Error: Server returned HTML instead of JSON. Response preview: " + textResponse.substring(0, 150));
+                }
+
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    throw new Error(`HTTP Error ${response.status}: ${textResponse}`);
                 }
                 
-                const data = await response.json();
-                
                 if (data.error) {
-                    throw new Error(data.error);
+                    throw new Error(`API Error: ${data.error}`);
                 }
 
                 loader.style.display = 'none';
@@ -352,7 +363,13 @@
             } catch (error) {
                 loader.style.display = 'none';
                 console.error('Fetch error:', error);
-                recipeList.innerHTML = '<p style="color: red;">Failed to load data from server. Check console.</p>';
+                
+                // Display the exact diagnostic error directly in the UI
+                recipeList.innerHTML = `
+                    <div style="background-color: #ff5252; color: white; padding: 15px; border-radius: 8px;">
+                        <strong>Diagnostic Error:</strong><br>
+                        <span style="font-family: monospace; font-size: 0.9rem; word-break: break-all;">${error.message}</span>
+                    </div>`;
             }
         }
 
@@ -362,23 +379,37 @@
             subContent.innerHTML = 'Caricamento in corso...';
 
             try {
-                const response = await fetch(`${WEB_APP_URL}?action=getSubstitutionsData`);
+                const response = await fetch(`${WEB_APP_URL}?action=getSubstitutionsData`, {
+                    method: 'GET',
+                    redirect: 'follow'
+                });
                 
+                const textResponse = await response.text();
+                
+                let data;
+                try {
+                    data = JSON.parse(textResponse);
+                } catch (parseError) {
+                    throw new Error("Parse Error: Server returned HTML instead of JSON. Response preview: " + textResponse.substring(0, 150));
+                }
+
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    throw new Error(`HTTP Error ${response.status}: ${textResponse}`);
                 }
                 
-                const data = await response.json();
-                
                 if (data.error) {
-                    throw new Error(data.error);
+                    throw new Error(`API Error: ${data.error}`);
                 }
 
                 renderSubstitutions(data);
 
             } catch (error) {
                 console.error('Fetch error:', error);
-                subContent.innerHTML = '<p style="color:red;">Failed to load substitutions from server.</p>';
+                subContent.innerHTML = `
+                    <div style="background-color: #ff5252; color: white; padding: 15px; border-radius: 8px;">
+                        <strong>Diagnostic Error:</strong><br>
+                        <span style="font-family: monospace; font-size: 0.9rem; word-break: break-all;">${error.message}</span>
+                    </div>`;
             }
         }
 
